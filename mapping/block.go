@@ -145,3 +145,7 @@ func (m *DefaultBlockMapping) Adjust(entries []protocol.BlockEntry) {
 		m.runtimeIDToState[uint32(rid)] = state
 	}
 }
+
+func (m *DefaultBlockMapping) Air() uint32 {
+	return m.airRID
+}

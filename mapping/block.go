@@ -1,6 +1,7 @@
 package mapping
 
 import (
+	"sync"
 	"bytes"
 	"github.com/akmalfairuz/legacy-version/internal"
 	"sort"
@@ -36,6 +37,8 @@ type DefaultBlockMapping struct {
 
 	// airRID is the runtime ID of the air block in the latest version of the game.
 	airRID uint32
+
+	mu sync.RWMutex 
 }
 
 func NewBlockMapping(raw []byte) *DefaultBlockMapping {
@@ -80,11 +83,17 @@ func (m *DefaultBlockMapping) WithBlockActorRemapper(downgrader, upgrader func(m
 }
 
 func (m *DefaultBlockMapping) StateToRuntimeID(state blockupgrader.BlockState) (uint32, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	rid, ok := m.stateRuntimeIDs[internal.HashState(blockupgrader.Upgrade(state))]
 	return rid, ok
 }
 
 func (m *DefaultBlockMapping) RuntimeIDToState(runtimeId uint32) (blockupgrader.BlockState, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	state, found := m.runtimeIDToState[runtimeId]
 	return state, found
 }
@@ -108,11 +117,14 @@ func (m *DefaultBlockMapping) Adjust(entries []protocol.BlockEntry) {
 
 	customStates := convert(entries)
 	var newStates []blockupgrader.BlockState
+	m.mu.RLock()
 	for _, state := range customStates {
-		if _, ok := m.StateToRuntimeID(state); !ok {
+		if _, ok := m.stateRuntimeIDs[internal.HashState(blockupgrader.Upgrade(state))]; !ok {
 			newStates = append(newStates, state)
 		}
 	}
+	m.mu.RUnlock()
+
 	if len(newStates) == 0 {
 		return
 	}
@@ -123,14 +135,13 @@ func (m *DefaultBlockMapping) Adjust(entries []protocol.BlockEntry) {
 		return stateOne.Name != stateTwo.Name && fnv1.HashString64(stateOne.Name) < fnv1.HashString64(stateTwo.Name)
 	})
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.stateRuntimeIDs = make(map[internal.StateHash]uint32, len(adjustedStates))
 	m.runtimeIDToState = make(map[uint32]blockupgrader.BlockState, len(adjustedStates))
 	for rid, state := range adjustedStates {
 		m.stateRuntimeIDs[internal.HashState(blockupgrader.Upgrade(state))] = uint32(rid)
 		m.runtimeIDToState[uint32(rid)] = state
 	}
-}
-
-func (m *DefaultBlockMapping) Air() uint32 {
-	return m.airRID
 }

@@ -41,12 +41,11 @@ type BiomeDefinition struct {
 func (x *BiomeDefinition) Marshal(r protocol.IO) {
 	r.Int16(&x.NameIndex)
 	if IsProtoLT(r, ID827) {
-		var opt protocol.Optional[int16]
+		var opt int16 = -1
 		if x.BiomeID != -1 {
-			opt = protocol.Option(x.BiomeID)
+			opt = x.BiomeID
 		}
-		protocol.OptionalFunc(r, &opt, r.Int16)
-		x.BiomeID, _ = opt.Value()
+		r.Int16(&opt)
 	} else {
 		r.Int16(&x.BiomeID)
 	}

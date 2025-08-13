@@ -3,8 +3,9 @@ package mapping
 import (
 	"sync"
 	"bytes"
-	"github.com/akmalfairuz/legacy-version/internal"
 	"sort"
+
+	"github.com/akmalfairuz/legacy-version/internal"
 
 	"github.com/df-mc/worldupgrader/blockupgrader"
 	"github.com/sandertv/gophertunnel/minecraft/nbt"
@@ -24,6 +25,7 @@ type Block interface {
 	// Adjust adjusts the latest mappings to account for custom states.
 	Adjust([]protocol.BlockEntry)
 	Air() uint32
+	InfoUpdate() uint32
 }
 
 type DefaultBlockMapping struct {
@@ -38,6 +40,9 @@ type DefaultBlockMapping struct {
 	// airRID is the runtime ID of the air block in the latest version of the game.
 	airRID uint32
 
+	// infoUpdateRID is the runtime ID of the info_update block in the latest version of the game.
+	infoUpdateBlockRID uint32
+
 	mu sync.RWMutex 
 }
 
@@ -48,6 +53,7 @@ func NewBlockMapping(raw []byte) *DefaultBlockMapping {
 	stateRuntimeIDs := make(map[internal.StateHash]uint32)
 	runtimeIDToState := make(map[uint32]blockupgrader.BlockState)
 	var airRID *uint32
+	var infoUpdateBlockRID *uint32
 
 	var s blockupgrader.BlockState
 	for {
@@ -57,8 +63,11 @@ func NewBlockMapping(raw []byte) *DefaultBlockMapping {
 
 		rid := uint32(len(states))
 		states = append(states, s)
-		if s.Name == "minecraft:air" {
+		switch s.Name {
+		case "minecraft:air":
 			airRID = &rid
+		case "minecraft:info_update":
+			infoUpdateBlockRID = &rid
 		}
 
 		stateRuntimeIDs[internal.HashState(blockupgrader.Upgrade(s))] = rid
@@ -67,12 +76,16 @@ func NewBlockMapping(raw []byte) *DefaultBlockMapping {
 	if airRID == nil {
 		panic("couldn't find air")
 	}
+	if infoUpdateBlockRID == nil {
+		panic("couldn't find info_update block")
+	}
 
 	return &DefaultBlockMapping{
-		states:           states,
-		stateRuntimeIDs:  stateRuntimeIDs,
-		runtimeIDToState: runtimeIDToState,
-		airRID:           *airRID,
+		states:             states,
+		stateRuntimeIDs:    stateRuntimeIDs,
+		runtimeIDToState:   runtimeIDToState,
+		airRID:             *airRID,
+		infoUpdateBlockRID: *infoUpdateBlockRID,
 	}
 }
 
@@ -148,4 +161,8 @@ func (m *DefaultBlockMapping) Adjust(entries []protocol.BlockEntry) {
 
 func (m *DefaultBlockMapping) Air() uint32 {
 	return m.airRID
+}
+
+func (m *DefaultBlockMapping) InfoUpdate() uint32 {
+	return m.infoUpdateBlockRID
 }
